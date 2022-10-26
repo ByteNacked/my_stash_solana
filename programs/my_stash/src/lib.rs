@@ -4,6 +4,14 @@ use spl_token::instruction::AuthorityType;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
+#[error_code]
+pub enum MyStashError {
+    #[msg("Too big lock seconds value")]
+    BadLockSeconds,
+    #[msg("Lock seconds are not expired")]
+    Locked,
+}
+
 #[program]
 pub mod my_stash {
     use super::*;
@@ -43,9 +51,9 @@ pub mod my_stash {
         let stash_token_acc_auth = &mut ctx.accounts.stash_token_account_authority;
         let reciever_token_acc = &mut ctx.accounts.reciever_token_account;
 
-        // Check if the stash became unlocked
+        // Check if the stash is still locked
         if is_locked(stash_acc.unlock_time)? {
-            panic!()
+            return err!(MyStashError::Locked);
         }
 
         let (_stash_authority, stash_authority_bump) =
@@ -130,9 +138,8 @@ pub struct Retrieve<'info> {
 
 fn get_unlock_time(lock_seconds: u64) -> Result<i64> {
     let lock_seconds = lock_seconds as i64;
-    if lock_seconds.is_negative() {
-        panic!()
-    }
+    require!(!lock_seconds.is_negative(), MyStashError::BadLockSeconds);
+
     Ok(clock::Clock::get()?
         .unix_timestamp
         .checked_add(lock_seconds)
@@ -142,4 +149,3 @@ fn get_unlock_time(lock_seconds: u64) -> Result<i64> {
 fn is_locked(unlock_time: i64) -> Result<bool> {
     Ok(clock::Clock::get()?.unix_timestamp < unlock_time)
 }
-
