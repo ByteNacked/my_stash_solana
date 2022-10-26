@@ -5,6 +5,7 @@ An escrow smart-contract where a user can deposit a given SPL token and lock it 
 ### Usage
 
 Use 'initialize' to lock tokens for an arbitrary number of seconds.
+
 Use 'retrieve' method to get tokens back after a lock time is up.
 
 ### TODO:
