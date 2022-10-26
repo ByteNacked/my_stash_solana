@@ -14,7 +14,7 @@ describe("my_stash", () => {
 
   let mint = null as Token;
   let tempTokenAccount = null;
-  let recieverTokenAccount = null;
+  let mainTokenAccount = null;
   let stashAuthorityPda = null;
 
   const mainAccount = anchor.web3.Keypair.generate();
@@ -57,26 +57,26 @@ describe("my_stash", () => {
       TOKEN_PROGRAM_ID
     );
 
-    tempTokenAccount = await mint.createAccount(mainAccount.publicKey);
+    mainTokenAccount = await mint.createAccount(mainAccount.publicKey);
     
     await mint.mintTo(
-      tempTokenAccount,
+      mainTokenAccount,
       mintAuthority.publicKey,
       [mintAuthority],
       totalAmount
     );
 
-    let _initializerTokenAccount = await mint.getAccountInfo(tempTokenAccount);
+    let _initializerTokenAccount = await mint.getAccountInfo(mainTokenAccount);
     assert.ok(_initializerTokenAccount.amount.toNumber() == totalAmount);
 
-    recieverTokenAccount = await mint.createAccount(mainAccount.publicKey);
-
+    tempTokenAccount = await mint.createAccount(mainAccount.publicKey);
   });
 
   it("Put to my_stash", async () => {
     await program.methods.initialize(new BN(lockSeconds))
         .accounts({
             initializer: mainAccount.publicKey,
+            senderTokenAccount: mainTokenAccount,
             stashAccount: stashStateAccount.publicKey,
             stashTokenAccount: tempTokenAccount,
             systemProgram: anchor.web3.SystemProgram.programId,
@@ -93,9 +93,11 @@ describe("my_stash", () => {
       stashStateAccount.publicKey
     );
 
+    // Check that tokens transefred to tmp token account
+    let _tmp_token_acc = await mint.getAccountInfo(_stash.stashTokenAccount);
+    assert.ok(_tmp_token_acc.amount.toNumber() == totalAmount);
     // Check that the new owner is the PDA.
-    let _stash_token = await mint.getAccountInfo(_stash.stashTokenAccount);
-    assert.ok(_stash_token.owner.equals(stashAuthorityPda));
+    assert.ok(_tmp_token_acc.owner.equals(stashAuthorityPda));
 
     // Check that the values in the stash account match what we expect.
     assert.ok(_stash.initializerKey.equals(mainAccount.publicKey));
@@ -107,7 +109,8 @@ describe("my_stash", () => {
     function delay(milliseconds : number) {
         return new Promise(resolve => setTimeout(resolve, milliseconds));
     }
-    await delay(lockSeconds * 1000).then(() => console.log('Waiting for ', lockSeconds, 'lock seconds') );
+    const additionalDelayMs = 500;
+    await delay(lockSeconds * 1000 + additionalDelayMs).then(() => console.log('Waiting for ', lockSeconds, 'lock seconds') );
 
     await program.methods.retrieve()
         .accounts({
@@ -115,13 +118,13 @@ describe("my_stash", () => {
             stashAccount: stashStateAccount.publicKey,
             stashTokenAccount: tempTokenAccount,
             stashTokenAccountAuthority: stashAuthorityPda,
-            recieverTokenAccount: recieverTokenAccount,
+            recieverTokenAccount: mainTokenAccount,
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: TOKEN_PROGRAM_ID,
         }).signers([mainAccount]).rpc();
 
     // Check that the reciver get right token amount
-    let _recieverTokenAccount = await mint.getAccountInfo(recieverTokenAccount);
+    let _recieverTokenAccount = await mint.getAccountInfo(mainTokenAccount);
     assert.ok(_recieverTokenAccount.amount.toNumber() == totalAmount);
   });
 });

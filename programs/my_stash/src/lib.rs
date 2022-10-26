@@ -27,9 +27,23 @@ pub mod my_stash {
 
         stash_acc.unlock_time = get_unlock_time(lock_seconds)?;
 
+        // Transfer tokens to the temp stash token account
+        token::transfer(
+            {
+                let cpi_accounts = Transfer {
+                    from: ctx.accounts.sender_token_account.to_account_info().clone(),
+                    to: stash_token_acc.to_account_info().clone(),
+                    authority: init_acc.clone(),
+                };
+                CpiContext::new(ctx.accounts.token_program.clone(), cpi_accounts)
+            },
+            ctx.accounts.sender_token_account.amount,
+        )?;
+
         let (stash_authority, _stash_authority_bump) =
             Pubkey::find_program_address(&[MY_STASH_PDA_SEED], ctx.program_id);
 
+        // Change the temp stash token account authority to PDA
         token::set_authority(
             {
                 let cpi_accounts = SetAuthority {
@@ -102,6 +116,8 @@ pub struct Initialize<'info> {
     /// CHECK: This is not dangerous because we don't read or write from this account
     #[account(mut, signer)]
     pub initializer: AccountInfo<'info>,
+    #[account(mut)]
+    pub sender_token_account: Account<'info, TokenAccount>,
     #[account(init, payer = initializer, space = 8 + 32 * 2 + 8)]
     pub stash_account: Account<'info, StashAccount>,
     #[account(mut)]
